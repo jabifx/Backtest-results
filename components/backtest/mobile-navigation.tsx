@@ -10,6 +10,8 @@ import { Home, LineChart, List, Settings } from "lucide-react"
 interface MobileNavigationProps {
   className?: string
   id: string
+  symbol: string
+  strategy: string
 }
 
 export function MobileNavigation({ className, id }: MobileNavigationProps) {

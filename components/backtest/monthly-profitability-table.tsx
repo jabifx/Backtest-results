@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -10,209 +10,235 @@ interface MonthlyProfitabilityTableProps {
   monthlyStats: MonthlyStats
 }
 
+const MONTH_ORDER = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"] as const
+const DEFAULT_YEARS_TO_SHOW = 5
+
 export function MonthlyProfitabilityTable({ monthlyStats }: MonthlyProfitabilityTableProps) {
   const [showAllYears, setShowAllYears] = useState(false)
   const [selectedYear, setSelectedYear] = useState<string | null>(null)
 
-  // Meses en orden
-  const monthOrder = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+  // Memoizar cálculos pesados
+  const { years, yearlyTotals, monthlyTotals, grandTotal } = useMemo(() => {
+    const yearList = Object.keys(monthlyStats).sort((a, b) => Number(b) - Number(a))
 
-  // Años en orden descendente
-  const years = Object.keys(monthlyStats).sort((a, b) => Number(b) - Number(a))
-
-  // Determine which years to display
-  const displayYears = selectedYear ? [selectedYear] : showAllYears ? years : years.slice(0, Math.min(5, years.length))
-
-  // Calculate totals for displayed years only
-  const displayYearlyTotals = displayYears.map((year) => {
-    let total = 0
-    monthOrder.forEach((month) => {
-      const yearData = monthlyStats[year]
-      total += yearData[month] || 0
+    // Calcular totales por año
+    const yearTotals = yearList.map(year => {
+      const total = MONTH_ORDER.reduce((sum, month) => sum + (monthlyStats[year]?.[month] || 0), 0)
+      return Number(total.toFixed(2))
     })
-    return total.toFixed(2)
-  })
 
-  // Calcular totales por mes (para la última fila)
-  const monthlyTotals = monthOrder.map((month) => {
-    let total = 0
-    years.forEach((year) => {
-      const yearData = monthlyStats[year]
-      total += yearData[month] || 0
+    // Calcular totales por mes
+    const monthTotals = MONTH_ORDER.map(month => {
+      const total = yearList.reduce((sum, year) => sum + (monthlyStats[year]?.[month] || 0), 0)
+      return Number(total.toFixed(2))
     })
-    return total.toFixed(2)
-  })
 
-  // Calcular totales por año (para la última columna)
-  const yearlyTotals = years.map((year) => {
-    let total = 0
-    monthOrder.forEach((month) => {
-      const yearData = monthlyStats[year]
-      total += yearData[month] || 0
+    // Total general
+    const total = yearTotals.reduce((sum, value) => sum + value, 0)
+
+    return {
+      years: yearList,
+      yearlyTotals: yearTotals,
+      monthlyTotals: monthTotals,
+      grandTotal: Number(total.toFixed(2))
+    }
+  }, [monthlyStats])
+
+  // Años a mostrar
+  const displayYears = useMemo(() => {
+    if (selectedYear) return [selectedYear]
+    if (showAllYears) return years
+    return years.slice(0, Math.min(DEFAULT_YEARS_TO_SHOW, years.length))
+  }, [selectedYear, showAllYears, years])
+
+  // Totales para años mostrados
+  const displayYearlyTotals = useMemo(() => {
+    return displayYears.map(year => {
+      const yearIndex = years.indexOf(year)
+      return yearlyTotals[yearIndex]
     })
-    return total.toFixed(2)
-  })
+  }, [displayYears, years, yearlyTotals])
 
-  // Calcular total general
-  const grandTotal = yearlyTotals.reduce((sum, value) => sum + Number.parseFloat(value), 0).toFixed(2)
+  // Calcular promedios para múltiples años
+  const averages = useMemo(() => {
+    if (displayYears.length <= 1) return null
+
+    const monthlyAvgs = monthlyTotals.map(total => Number((total / displayYears.length).toFixed(2)))
+    const yearlyAvg = Number((grandTotal / displayYears.length).toFixed(2))
+
+    return { monthlyAvgs, yearlyAvg }
+  }, [displayYears.length, monthlyTotals, grandTotal])
+
+  // Funciones helper
+  const formatValue = (value: number): string => {
+    return Math.abs(value) < 0.01 ? "—" : value.toFixed(1)
+  }
+
+  const getValueClassName = (value: number, isSignificant = true): string => {
+    if (Math.abs(value) < 0.01) return "text-muted-foreground"
+
+    const intensity = isSignificant && Math.abs(value) > 0.1 ? "font-medium" : ""
+    const color = value > 0 ? "text-green-600" : "text-red-600"
+
+    return `${color} ${intensity}`.trim()
+  }
+
+  const toggleYearView = () => {
+    setShowAllYears(!showAllYears)
+    setSelectedYear(null)
+  }
+
+  const handleYearSelect = (year: string) => {
+    setSelectedYear(year === "all" ? null : year)
+    setShowAllYears(false)
+  }
 
   return (
-    <Card className="shadow-md">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          Rentabilidad Mensual (%)
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowAllYears(!showAllYears)} className="text-xs">
-              {showAllYears ? "Mostrar menos" : `Ver todos (${years.length})`}
-            </Button>
-            {years.length > 5 && (
-              <select
-                value={selectedYear || "all"}
-                onChange={(e) => setSelectedYear(e.target.value === "all" ? null : e.target.value)}
-                className="text-xs border rounded px-2 py-1"
+      <Card className="shadow-md">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            Rentabilidad Mensual (%)
+            <div className="flex items-center gap-2">
+              <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleYearView}
+                  className="text-xs"
               >
-                <option value="all">Todos los años</option>
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        {years.length > 10 && !showAllYears && !selectedYear && (
-          <div className="p-4 bg-muted/30 border-b">
-            <p className="text-sm text-muted-foreground">
-              📊 Mostrando últimos 5 años de {years.length} años totales.
-              <Button variant="link" className="p-0 h-auto text-sm" onClick={() => setShowAllYears(true)}>
-                Ver todos los años
+                {showAllYears ? "Mostrar menos" : `Ver todos (${years.length})`}
               </Button>
-            </p>
-          </div>
-        )}
-
-        <div className="overflow-auto max-h-[600px]">
-          <Table>
-            <TableHeader className="sticky top-0 bg-background z-20">
-              <TableRow>
-                <TableHead className="font-bold sticky left-0 bg-background z-30 border-r">Año</TableHead>
-                {monthOrder.map((month) => (
-                  <TableHead key={month} className="text-center min-w-[60px]">
-                    {month}
-                  </TableHead>
-                ))}
-                <TableHead className="text-center font-bold min-w-[80px] border-l">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {displayYears.map((year, yearIndex) => (
-                <TableRow key={year} className="hover:bg-muted/50">
-                  <TableCell className="font-bold sticky left-0 bg-background z-10 border-r">{year}</TableCell>
-                  {monthOrder.map((month) => {
-                    const value = monthlyStats[year][month] || 0
-                    const isSignificant = Math.abs(value) > 0.1
-                    return (
-                      <TableCell
-                        key={`${year}-${month}`}
-                        className={`text-center text-sm ${
-                          value > 0
-                            ? isSignificant
-                              ? "text-green-600 font-medium"
-                              : "text-green-500"
-                            : value < 0
-                              ? isSignificant
-                                ? "text-red-600 font-medium"
-                                : "text-red-500"
-                              : "text-muted-foreground"
-                        }`}
-                      >
-                        {Math.abs(value) < 0.01 ? "—" : value.toFixed(1)}
-                      </TableCell>
-                    )
-                  })}
-                  <TableCell
-                    className={`text-center font-bold text-sm border-l ${
-                      Number.parseFloat(displayYearlyTotals[yearIndex]) > 0
-                        ? "text-green-600"
-                        : Number.parseFloat(displayYearlyTotals[yearIndex]) < 0
-                          ? "text-red-600"
-                          : "text-muted-foreground"
-                    }`}
+              {years.length > DEFAULT_YEARS_TO_SHOW && (
+                  <select
+                      value={selectedYear || "all"}
+                      onChange={(e) => handleYearSelect(e.target.value)}
+                      className="text-xs border rounded px-2 py-1"
                   >
-                    {displayYearlyTotals[yearIndex]}
-                  </TableCell>
-                </TableRow>
-              ))}
-
-              {/* Fila de totales solo si se muestran múltiples años */}
-              {displayYears.length > 1 && (
-                <TableRow className="bg-muted/50 border-t-2 font-bold">
-                  <TableCell className="font-bold sticky left-0 bg-muted/50 z-10 border-r">Promedio</TableCell>
-                  {monthlyTotals.map((total, index) => {
-                    const avgValue = Number.parseFloat(total) / displayYears.length
-                    return (
-                      <TableCell
-                        key={`avg-${index}`}
-                        className={`text-center font-bold text-sm ${
-                          avgValue > 0 ? "text-green-600" : avgValue < 0 ? "text-red-600" : "text-muted-foreground"
-                        }`}
-                      >
-                        {Math.abs(avgValue) < 0.01 ? "—" : avgValue.toFixed(1)}
-                      </TableCell>
-                    )
-                  })}
-                  <TableCell
-                    className={`text-center font-bold text-sm border-l ${
-                      Number.parseFloat(grandTotal) / displayYears.length > 0
-                        ? "text-green-600"
-                        : Number.parseFloat(grandTotal) / displayYears.length < 0
-                          ? "text-red-600"
-                          : "text-muted-foreground"
-                    }`}
-                  >
-                    {(Number.parseFloat(grandTotal) / displayYears.length).toFixed(1)}
-                  </TableCell>
-                </TableRow>
+                    <option value="all">Todos los años</option>
+                    {years.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                    ))}
+                  </select>
               )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Resumen compacto para datasets grandes */}
-        {years.length > 5 && (
-          <div className="p-4 bg-muted/20 border-t">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <div className="text-muted-foreground">Período</div>
-                <div className="font-medium">
-                  {years[years.length - 1]} - {years[0]}
-                </div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Años totales</div>
-                <div className="font-medium">{years.length}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Rentabilidad total</div>
-                <div className={`font-medium ${Number.parseFloat(grandTotal) > 0 ? "text-green-600" : "text-red-600"}`}>
-                  {grandTotal}%
-                </div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Promedio anual</div>
-                <div
-                  className={`font-medium ${Number.parseFloat(grandTotal) / years.length > 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  {(Number.parseFloat(grandTotal) / years.length).toFixed(1)}%
-                </div>
-              </div>
             </div>
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          {years.length > 10 && !showAllYears && !selectedYear && (
+              <div className="p-4 bg-muted/30 border-b">
+                <p className="text-sm text-muted-foreground">
+                  📊 Mostrando últimos {DEFAULT_YEARS_TO_SHOW} años de {years.length} años totales.
+                  <Button
+                      variant="link"
+                      className="p-0 h-auto text-sm ml-1"
+                      onClick={toggleYearView}
+                  >
+                    Ver todos los años
+                  </Button>
+                </p>
+              </div>
+          )}
+
+          <div className="overflow-auto max-h-[600px]">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background z-20">
+                <TableRow>
+                  <TableHead className="font-bold sticky left-0 bg-background z-30 border-r">
+                    Año
+                  </TableHead>
+                  {MONTH_ORDER.map((month) => (
+                      <TableHead key={month} className="text-center min-w-[60px]">
+                        {month}
+                      </TableHead>
+                  ))}
+                  <TableHead className="text-center font-bold min-w-[80px] border-l">
+                    Total
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {displayYears.map((year, yearIndex) => (
+                    <TableRow key={year} className="hover:bg-muted/50">
+                      <TableCell className="font-bold sticky left-0 bg-background z-10 border-r">
+                        {year}
+                      </TableCell>
+                      {MONTH_ORDER.map((month) => {
+                        const value = monthlyStats[year]?.[month] || 0
+                        return (
+                            <TableCell
+                                key={`${year}-${month}`}
+                                className={`text-center text-sm ${getValueClassName(value, Math.abs(value) > 0.1)}`}
+                            >
+                              {formatValue(value)}
+                            </TableCell>
+                        )
+                      })}
+                      <TableCell
+                          className={`text-center font-bold text-sm border-l ${getValueClassName(displayYearlyTotals[yearIndex])}`}
+                      >
+                        {displayYearlyTotals[yearIndex].toFixed(1)}
+                      </TableCell>
+                    </TableRow>
+                ))}
+
+                {/* Fila de promedios para múltiples años */}
+                {averages && (
+                    <TableRow className="bg-muted/50 border-t-2 font-bold">
+                      <TableCell className="font-bold sticky left-0 bg-muted/50 z-10 border-r">
+                        Promedio
+                      </TableCell>
+                      {averages.monthlyAvgs.map((avg, index) => (
+                          <TableCell
+                              key={`avg-${index}`}
+                              className={`text-center font-bold text-sm ${getValueClassName(avg)}`}
+                          >
+                            {formatValue(avg)}
+                          </TableCell>
+                      ))}
+                      <TableCell
+                          className={`text-center font-bold text-sm border-l ${getValueClassName(averages.yearlyAvg)}`}
+                      >
+                        {averages.yearlyAvg.toFixed(1)}
+                      </TableCell>
+                    </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </div>
-        )}
-      </CardContent>
-    </Card>
+
+          {/* Resumen para datasets grandes */}
+          {years.length > DEFAULT_YEARS_TO_SHOW && (
+              <div className="p-4 bg-muted/20 border-t">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-muted-foreground">Período</div>
+                    <div className="font-medium">
+                      {years[years.length - 1]} - {years[0]}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Años totales</div>
+                    <div className="font-medium">{years.length}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Rentabilidad total</div>
+                    <div className={`font-medium ${getValueClassName(grandTotal)}`}>
+                      {grandTotal.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Promedio anual</div>
+                    <div className={`font-medium ${getValueClassName(grandTotal / years.length)}`}>
+                      {(grandTotal / years.length).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+          )}
+        </CardContent>
+      </Card>
   )
 }

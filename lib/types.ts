@@ -7,7 +7,7 @@ export interface Trade {
   SL?: number
   HORA: string
   "P&L": number
-  IMAGE?: string // Base64 encoded image
+  IMAGE?: string
 }
 
 export interface BacktestConfig {
