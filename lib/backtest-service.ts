@@ -17,9 +17,7 @@ const getBacktestFilePath = (id: string) => {
   return path.join(DATA_DIR, `${id}.json`)
 }
 
-// Convert new format to legacy format for compatibility
 function convertNewToLegacy(newData: NewBacktestData): BacktestData {
-  console.log("🔄 Converting new format to legacy format")
 
   return {
     config: newData.metadata.config,
@@ -35,19 +33,15 @@ function convertNewToLegacy(newData: NewBacktestData): BacktestData {
 // Save backtest data to a file
 export async function saveBacktest(id: string, data: NewBacktestData | BacktestData): Promise<void> {
   console.log(`💾 Saving backtest ${id}`)
-  console.log(`📊 Data structure:`, Object.keys(data))
 
   ensureDataDir()
   const filePath = getBacktestFilePath(id)
 
   // Check if it's new format or legacy format
   if ("backtest_id" in data) {
-    console.log("✅ New format detected")
     // It's new format, save as is
     await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2))
   } else {
-    console.log("✅ Legacy format detected")
-    // It's legacy format, save as is
     await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2))
   }
 
@@ -63,14 +57,11 @@ export async function getBacktest(id: string): Promise<BacktestData> {
     const parsedData = JSON.parse(data)
 
     console.log(`📖 Loading backtest ${id}`)
-    console.log(`📊 Data structure:`, Object.keys(parsedData))
 
     // Check if it's new format
     if ("backtest_id" in parsedData) {
-      console.log("🔄 Converting new format to legacy for compatibility")
       return convertNewToLegacy(parsedData as NewBacktestData)
     } else {
-      console.log("✅ Legacy format, using as is")
       return parsedData as BacktestData
     }
   } catch (error) {
@@ -87,13 +78,10 @@ export async function getBacktest(id: string): Promise<BacktestData> {
 
 // Validate backtest data structure (updated for both formats)
 export function isValidBacktestData(data: any): boolean {
-  console.log("🔍 Validating backtest data structure")
-  console.log("📊 Data keys:", Object.keys(data || {}))
 
   try {
     // Check if it's new format
     if ("backtest_id" in data) {
-      console.log("✅ Validating new format")
       const isValid =
         data &&
         typeof data === "object" &&
@@ -125,7 +113,6 @@ export function isValidBacktestData(data: any): boolean {
 
       return isValid
     } else {
-      console.log("✅ Validating legacy format")
       // Legacy format validation
       const isValid =
         data &&

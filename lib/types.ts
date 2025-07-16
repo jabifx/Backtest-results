@@ -1,3 +1,8 @@
+export interface TradeImage {
+  titulo: string
+  imagen: string
+}
+
 export interface Trade {
   ORDEN: "BUY" | "SELL"
   RESULTADO: "TP" | "SL"
@@ -7,7 +12,7 @@ export interface Trade {
   SL?: number
   HORA: string
   "P&L": number
-  IMAGE?: string
+  IMAGE?: TradeImage[] // Array of image objects
 }
 
 export interface BacktestConfig {
