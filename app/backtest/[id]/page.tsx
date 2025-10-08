@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation"
-import { useMemo } from "react"
 import { getBacktest } from "@/lib/backtest-service"
 import { PerformanceChart } from "@/components/backtest/performance-chart"
 import { StatsHighlights } from "@/components/backtest/stats-highlights"

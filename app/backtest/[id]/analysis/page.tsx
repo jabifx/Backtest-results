@@ -96,7 +96,6 @@ export default async function AnalysisPage({ params }: { params: { id: string } 
 
           {/* Pestaña de Distribución */}
           <TabsContent value="distribution" className="space-y-6">
-            {/* Distribución de Ganancias */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle>Distribución de Ganancias</CardTitle>
